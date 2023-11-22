@@ -6,13 +6,13 @@ import threading
 import queue
 
 
-message_received_callback = None
+
+
 ws_server_thread = None
 class WebSocketServerThread(threading.Thread):
-    def __init__(self, url, port):
+    def __init__(self, uri):
         threading.Thread.__init__(self)
-        self.url = url
-        self.port = port
+        self.uri = uri
         self.send_queue = queue.Queue()
         self.receive_queue = queue.Queue()
         self.stop_event = threading.Event()
@@ -35,8 +35,9 @@ class WebSocketServerThread(threading.Thread):
             while not self.send_queue.empty():
                 message = self.send_queue.get_nowait()
                 await websocket.send(message)
-        self.server.close()
-        await self.server.wait_closed()
+        if self.server:
+            self.server.close()
+            await self.server.wait_closed()
         
         
 
@@ -55,7 +56,7 @@ class WebSocketServerThread(threading.Thread):
 #        asyncio.get_event_loop().run_forever()
         self.loop = asyncio.new_event_loop()
         asyncio.set_event_loop(self.loop)
-        start_server = websockets.serve(self.websocket_server, self.url, self.port)
+        start_server = websockets.serve(self.websocket_server, 'localhost', 8765)
         self.server = self.loop.run_until_complete(start_server)
         self.loop.run_forever()
 
@@ -72,7 +73,6 @@ class WebSocketServerThread(threading.Thread):
         
 def process_websocket_messages():
     global ws_server_thread
-    global message_received_callback
     if ws_server_thread is not None:
         message = ws_server_thread.get_next_received_message()
         if message is not None:
@@ -87,19 +87,11 @@ def process_websocket_messages():
                     switch_request(request_type, data)
                     
             print("Received message:", message)
-            #ws_server_thread.enqueue_message(message)
-            if message_received_callback:
-                message_received_callback(message);
-                # Process the received message
+            ws_server_thread.enqueue_message(message)
+            # Process the received message
 
     return 0.1  # Poll every 0.1 seconds
 
-def test_message_received_callback(message):
-    global ws_server_thread
-    if ws_server_thread:
-        ws_server_thread.enqueue_message(f"Call back recieved: {message}")
-    else: print("Warning ws server thread is None")
-    
 def parse_json_request(json_string):
     try:
         # Parse the JSON string into a dictionary
@@ -122,13 +114,15 @@ def switch_request(case, args):
 def handle_default(args):
     global ws_server_thread
     print("Request type is not in dictionary")
-    ws_server_thread.enqueue_message("Request type no in dictionary")
+    if ws_server_thread is not None:
+        ws_server_thread.enqueue_message("Request type no in dictionary")
     
 def add_node(args):
     global ws_server_thread
     node_id = args.get('bl_idname', 'no kind of node')
     message = f"Recieved message to add a {node_id} node and about to add the node."
-    ws_server_thread.enqueue_message(message)
+    if ws_server_thread is not None:
+        ws_server_thread.enqueue_message(message)
     
 def add_connection(args):
     pass
@@ -174,29 +168,16 @@ def unregister():
     bpy.utils.unregister_class(StopWebSocketServerOperator)
     bpy.utils.unregister_class(StartWebSocketServerOperator)
 
-def set_message_received_callback(callback_function):
-    global message_received_callback
-    print(f"Callback function is {callback_function}")
-    message_received_callback = callback_function
-    print(f"message callback is {message_received_callback}")
-
 def start_server():
     global ws_server_thread
-    print("about to call set the callback.")
-    print(f"function is {test_message_received_callback}")
-    set_message_received_callback(test_message_received_callback)
-    ws_server_thread = WebSocketServerThread(url = 'localhost', port = '8765')
+    ws_server_thread = WebSocketServerThread("ws://0.0.0.0:8765")
     ws_server_thread.start()
     bpy.app.timers.register(process_websocket_messages)
     
-
-def process_message(message):
-    if message_received_callback:
-        message_received_callback(message)
-    return 0.1  # Continue polling every 0.1 seconds
-    
 if __name__ == "__main__":
+    # Global WebSocket server instance
     register()
+    start_server()
    
     
     

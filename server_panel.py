@@ -1,6 +1,7 @@
 import sys
 import os
 
+# Assuming your module is in the same directory as your script
 import bpy
 from . import server
 
