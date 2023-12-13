@@ -4,15 +4,18 @@ from .lib import websockets
 import bpy
 import threading
 import queue
+import ssl
+import os
 
 
 
 
 ws_server_thread = None
+
+
 class WebSocketServerThread(threading.Thread):
-    def __init__(self, uri):
+    def __init__(self):
         threading.Thread.__init__(self)
-        self.uri = uri
         self.send_queue = queue.Queue()
         self.receive_queue = queue.Queue()
         self.stop_event = threading.Event()
@@ -54,9 +57,33 @@ class WebSocketServerThread(threading.Thread):
 #        start_server = websockets.serve(self.websocket_server, '0.0.0.0', 8765)
 #        asyncio.new_event_loop().run_until_complete(start_server)
 #        asyncio.get_event_loop().run_forever()
+        url = bpy.context.scene.websocket_server_url
+        port = bpy.context.scene.websocket_server_port
+        cert_pem = bpy.path.abspath(bpy.context.scene.websocket_ssl_cert)
+        key_pem = bpy.path.abspath(bpy.context.scene.websocket_ssl_key)
+        use_ssl = cert_pem and key_pem
+        if not os.path.isfile(cert_pem):
+            print(f"Certificate file not found: {cert_pem}")
+        else:
+            print(f"📜 cert pem path: {cert_pem}")
+        if not os.path.isfile(key_pem):
+            print(f"Key file not found: {key_pem}")
+        else:
+            print(f"🔑 key pem path: {key_pem}")
+         
+        ssl_context = None
+        if use_ssl:  # You can set this flag based on user input or configuration
+            ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+            ssl_context.load_cert_chain(certfile=cert_pem, keyfile=key_pem)
         self.loop = asyncio.new_event_loop()
         asyncio.set_event_loop(self.loop)
-        start_server = websockets.serve(self.websocket_server, 'localhost', 8765)
+        print(f"Starting server at {url}:{port}")
+        if use_ssl:
+            print("Using SSL")
+            start_server = websockets.serve(self.websocket_server, url, port, ssl=ssl_context)
+        else:
+            print("Not using SSL")
+            start_server = websockets.serve(self.websocket_server, url, port)
         self.server = self.loop.run_until_complete(start_server)
         self.loop.run_forever()
 
@@ -170,7 +197,7 @@ def unregister():
 
 def start_server():
     global ws_server_thread
-    ws_server_thread = WebSocketServerThread("ws://0.0.0.0:8765")
+    ws_server_thread = WebSocketServerThread()
     ws_server_thread.start()
     bpy.app.timers.register(process_websocket_messages)
     
