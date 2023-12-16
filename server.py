@@ -6,6 +6,7 @@ import threading
 import queue
 import ssl
 import os
+from . import execute_websocket_code
 
 
 
@@ -103,18 +104,24 @@ def process_websocket_messages():
     if ws_server_thread is not None:
         message = ws_server_thread.get_next_received_message()
         if message is not None:
-            data = parse_json_request(message)
-            if data is None:
-                ws_server_thread.enqueue_message("Invalid json_format. Message was: " + message)
-            else:
-                request_type = data.get('type', None)# Returns 'default_type' if 'type' is not found
-                if request_type is None:
-                    ws_server_thread.enqueue_message("Request missing a type. " + message)
-                else:
-                    switch_request(request_type, data)
+            # data = parse_json_request(message)
+            # if data is None:
+            #     #ws_server_thread.enqueue_message("Invalid json_format. Message was: " + message)
+            # else:
+            #     # execute python code and return either a json string or error message
+            #     request_type = data.get('type', None)# Returns 'default_type' if 'type' is not found
+            #     if request_type is None:
+            #         print("Request missing a type. " + message")
+            #         #ws_server_thread.enqueue_message("Request missing a type. " + message)
+            #     else:
+            #         switch_request(request_type, data)
                     
-            print("Received message:", message)
-            ws_server_thread.enqueue_message(message)
+            # print("Received message:", message)
+            # #ws_server_thread.enqueue_message(message)
+            
+            result = execute_websocket_code.execute_user_code(message)
+            text_res = result #json.dumps(result)
+            ws_server_thread.enqueue_message(text_res)
             # Process the received message
 
     return 0.1  # Poll every 0.1 seconds
@@ -180,8 +187,8 @@ class StartWebSocketServerOperator(bpy.types.Operator):
         global ws_server_thread
         if True: #ws_server_thread is None:
             print("Attempting to start WebSocket Server...")
-            start_server()
              # Ensure the thread has finished
+            start_server()
             print("WebSocket Server started")
         else:
             self.report({'INFO'}, "WebSocket Server thread is not None")
@@ -190,6 +197,8 @@ class StartWebSocketServerOperator(bpy.types.Operator):
 def register():
     bpy.utils.register_class(StopWebSocketServerOperator)
     bpy.utils.register_class(StartWebSocketServerOperator)
+    bpy.app.timers.register(start_server, first_interval=5.0)
+
 
 def unregister():
     bpy.utils.unregister_class(StopWebSocketServerOperator)
@@ -204,7 +213,6 @@ def start_server():
 if __name__ == "__main__":
     # Global WebSocket server instance
     register()
-    start_server()
    
     
     
