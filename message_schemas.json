@@ -1,0 +1,24 @@
+[{
+    "message_id": "anything unique",
+    "type": "console_code",
+    "code": "console code here"
+},
+{
+    "message_id": "id of the message being responded to",
+    "type": "console_return or node_return",
+    "stdout": "anything written to stdout or empty",
+    "stderr": "anything written to stderr or empty",
+    "caught_exception": "true or false",
+    "exception_message": "if caught_exception is true, this is the exception message",
+    "jsonified_return_value": "if the return value is jsonifiable, this is the jsonified return value"
+},
+{
+    "message_id": "anything unique",
+    "type": "mesh_update",
+    "json_str": "json string of the mesh being updated"
+    "mesh_id": "id of the mesh being updated",
+    "triangles": [[1,2,3],[4,5,6],[7,8,9]],
+    "vertices": [[1,2,3],[4,5,6],[7,8,9]],
+    "normals": [[1,2,3],[4,5,6],[7,8,9]]  
+}
+]

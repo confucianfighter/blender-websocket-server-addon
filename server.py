@@ -6,7 +6,8 @@ import threading
 import queue
 import ssl
 import os
-from . import execute_websocket_code
+from . import message_handler
+from . import openai_handler
 
 
 
@@ -119,8 +120,7 @@ def process_websocket_messages():
             # print("Received message:", message)
             # #ws_server_thread.enqueue_message(message)
             
-            result = execute_websocket_code.execute_user_code(message)
-            text_res = result #json.dumps(result)
+            text_res = message_handler.process_incomming_json_request(json_string = message)
             ws_server_thread.enqueue_message(text_res)
             # Process the received message
 
