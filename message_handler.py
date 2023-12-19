@@ -32,9 +32,8 @@ def process_incomming_json_request(json_string):
             # take the cube_json and send it back to the client
             return cube_json
         if data['type'] == "speech_to_text_request":
-            audio = data['audio']
             try:
-                return openai_handler.speech_to_text(audio)
+                return openai_handler.speech_to_text(json_string)
             except Exception as e:
                 # throw an error
                 raise RuntimeError("Error in speech_to_text_request" + e)

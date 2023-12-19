@@ -194,16 +194,28 @@ class StartWebSocketServerOperator(bpy.types.Operator):
         else:
             self.report({'INFO'}, "WebSocket Server thread is not None")
         return {'FINISHED'}
+# create openai_handler.assistant_code_request operator
+class AssistantCodeRequestOperator(bpy.types.Operator):
+    """Request code from OpenAI Codex"""
+    bl_idname = "wss.code"
+    bl_label = "Request code from OpenAI Codex"
+
+    def execute(self, context):
+        openai_handler.assistant_code_request(data="")
+        return {'FINISHED'}
 
 def register():
     bpy.utils.register_class(StopWebSocketServerOperator)
     bpy.utils.register_class(StartWebSocketServerOperator)
     bpy.app.timers.register(start_server, first_interval=5.0)
+    bpy.utils.register_class(AssistantCodeRequestOperator)
+    
 
 
 def unregister():
     bpy.utils.unregister_class(StopWebSocketServerOperator)
     bpy.utils.unregister_class(StartWebSocketServerOperator)
+    bpy.utils.unregister_class(AssistantCodeRequestOperator)
 
 def start_server():
     global ws_server_thread
