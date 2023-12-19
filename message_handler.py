@@ -36,7 +36,13 @@ def process_incomming_json_request(json_string):
                 return openai_handler.speech_to_text(json_string)
             except Exception as e:
                 # throw an error
-                raise RuntimeError("Error in speech_to_text_request" + e)
+                raise RuntimeError("Error in speech_to_text_request" + str(e))
+        if data['type'] == "console_code_request":
+            try:
+                return openai_handler.assistant_code_request(json_string)
+            except Exception as e:
+                # throw an error
+                raise RuntimeError("Error in assistant code request" + str(e))
                 
     except Exception as e:
         message = {"status": "fail",
