@@ -13,7 +13,7 @@ from . import openai_handler
 
 
 ws_server_thread = None
-
+max_size = 10 * 1024 * 1024
 
 class WebSocketServerThread(threading.Thread):
     def __init__(self):
@@ -80,12 +80,13 @@ class WebSocketServerThread(threading.Thread):
         self.loop = asyncio.new_event_loop()
         asyncio.set_event_loop(self.loop)
         print(f"Starting server at {url}:{port}")
+        global max_size
         if use_ssl:
             print("Using SSL")
-            start_server = websockets.serve(self.websocket_server, url, port, ssl=ssl_context)
+            start_server = websockets.serve(self.websocket_server, url, port, ssl=ssl_context, max_size=max_size)
         else:
             print("Not using SSL")
-            start_server = websockets.serve(self.websocket_server, url, port)
+            start_server = websockets.serve(self.websocket_server, url, port, max_size=max_size)
         self.server = self.loop.run_until_complete(start_server)
         self.loop.run_forever()
 
