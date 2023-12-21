@@ -71,7 +71,7 @@ def register():
     bpy.types.Scene.websocket_server_port = bpy.props.IntProperty(
         name = "Port",
         description = "WebSocket server port",
-        default = 8080,
+        default = 8777,
         min = 1,
         max = 65535,
         update = update_server_settings

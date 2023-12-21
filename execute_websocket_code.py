@@ -30,7 +30,14 @@ def execute_user_code(code):
         }
     except Exception as e:
         # Capture any errors
-        return {"status": "error", "error": str(e), "traceback": traceback.format_exc()}
+        return {
+            "type": "console_return",
+            "stdout": new_stdout.getvalue(),
+            "stderr": str(e),
+            "caught_exception": "true",
+            "status": "error", 
+            "error": str(e), "traceback": traceback.format_exc()
+        }
     finally:
         sys.stdout = old_stdout
         sys.stderr = old_stderr

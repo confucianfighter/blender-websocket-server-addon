@@ -6,6 +6,7 @@ import struct
 import pydub
 
 client = OpenAI()
+thread_id = None
 
 def text_completion():
     completion = client.chat.completions.create(
@@ -17,10 +18,24 @@ def text_completion():
     )
 
     print(completion.choices[0].message)
-def assistant_code_request(data):
-    #data = json.loads(data)
-    #user_request = data['user_request']
-    user_request = "print 'Wow, you really are a python console hot dogger' to the screen.))"
+def assistant_code_request(data) -> str:
+    global thread_id
+    data = parse_assistant_code_request(data)
+    if(data['status'] == "error"):
+        return json.dumps(data)
+    user_request = data['user_request']
+    # if user request length is less than 3, return a message saying that the request is too short
+    if(len(user_request) < 3):
+        message = {"status": "error",
+            "type":"code_assistant_reply",
+            "short_remark":  "Your request is too short. Please try again.",
+            "stderr": "",
+            "code": "",
+            "caught_exception": "false",
+            "result": ""
+        }
+        return json.dumps(message)
+    #user_request = "print 'Wow, you really are a python console hot dogger' to the screen.))"
     instructions = ("You are a Python console expert. Back in the days, they would have called you a console hot dogger. "
                      "When the user requests for something to be done, reply with a json containing a short witty response, "
                      "and then exactly the code you would put in a python console to do it. Reply only with json. Here is an example: "
@@ -28,18 +43,17 @@ def assistant_code_request(data):
                      "{\"short_remark\": \"No problem\", \"code\": \"print('hello world')\"}"
                      "The json will be auto parsed and executed by the client.")
     
-    try:
-        assistant = client.beta.assistants.create(
-            name="Python Console Hot Dogger",
-            instructions=instructions,
-            tools=[{"type": "code_interpreter"}],
-            model="gpt-4-1106-preview"
-        )
-    except Exception as e:
-        raise RuntimeError("Error creating assistant:\n" + str(e))
+    assistant = create_assistant(instructions=instructions);# create assistant
+    if(assistant['status'] == "error"):
+        return json.dumps(assistant)
+    assistant = assistant['assistant']
     
-    try:                        
-        thread = client.beta.threads.create()
+    try:
+        if(thread_id != None):
+            thread = client.beta.threads.retrieve(thread_id)
+        else:               
+            thread = client.beta.threads.create()
+            thread_id = thread.id
     except Exception as e:
         raise RuntimeError("Error creating assistant thread:\n" + str(e))
     
@@ -98,11 +112,21 @@ def assistant_code_request(data):
     
     first_message_text = strip_md_formatting(first_message_text)
     print(first_message_text)
+    if(first_message_text == ""):
+        # send code assistant reply failed message
+        message = {"status": "error",
+            "type":"code_assistant_reply",
+            "short_remark":  "Failed to parse code assistant JSON, Please try again.",
+            "stderr": "",
+            "code": "",
+            "caught_exception": "false",
+            "result": ""
+        }
     message_json = json.loads(first_message_text)
     short_remark = message_json['short_remark']
     code = message_json['code']
     message = {"status": "success",
-        "type":"assistant_code_reply",
+        "type":"code_assistant_reply",
         "short_remark":  short_remark,
         "stderr": "",
         "code": code,
@@ -117,7 +141,51 @@ def assistant_code_request(data):
     print(message)
     return message    # return message
 
+def create_assistant(instructions = ""):
+    try:
+        assistant = client.beta.assistants.create(
+            name="Python Console Hot Dogger",
+            instructions=instructions,
+            tools=[{"type": "code_interpreter"}],
+            model="gpt-4-1106-preview"
+        )
+    except Exception as e:
+        details = f"Error creating assistant: {e}\nThis happened during a code assitant request."
+        return {
+            "status": "error",
+            "type":"code_assistant_reply",
+            "short_remark":  "Failed to create code assistant, AI are like humans. Just try again.",
+            "stderr": details,
+            "code": "",
+            "caught_exception": "false",
+            "result": ""
+        }
+    return {
+        "status": "success",
+        "assistant": assistant
+    }
+
+def parse_assistant_code_request(json_string):
+    try:
+        # Parse the JSON string into a dictionary
+        data = json.loads(json_string)
+        # add a status key to the dictionary
+        data['status'] = "success"
+        return data
+    except json.JSONDecodeError as e:
+        details = f"Error parsing JSON string: {e}.\nString was: {json_string}"
+        data = {"status": "error",
+            "type":"code_assistant_reply",
+            "short_remark":  "Failed to parse code assistant request, Please try again.",
+            "stderr": details,
+            "code": "",
+            "caught_exception": "false",
+            "result": ""
+        }
+        return data
+    
 def strip_md_formatting(text):
+    stripped_text = ""
     if text.startswith("```json"):
         # Strip the Markdown code block syntax
         stripped_text = text.strip("```json\n").rstrip("```")
@@ -137,6 +205,7 @@ def strip_md_formatting(text):
         print("JSON string parses correctly, passing it on as a string.", data)
     except json.JSONDecodeError as e:
         print("Failed to decode JSON:", e)
+        return ""
     
     return stripped_text
     
@@ -182,7 +251,8 @@ def speech_to_text(data):
     print(text)
     print(text)
     message = {"status": "success",
-        "type":"console_return",
+        "type":"speech_to_text_reply",
+        "text": text,
         "stdout": text,
         "stderr": "",
         "caught_exception": "false",
