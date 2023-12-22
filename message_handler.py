@@ -45,10 +45,10 @@ def process_incomming_json_request(json_string):
                 raise RuntimeError("Error in assistant code request" + str(e))
     
     except Exception as e:
-        message = {"status": "fail",
+        message = {"status": "error",
             "type":"console_return",
-            "stdout": "Error in process_incomming_json_request",
-            "stderr": e,
+            "stdout": "",
+            "stderr": "Error in process_incomming_json_request:\n" + e,
             "caught_exception": "false",
             "result": ""
         }

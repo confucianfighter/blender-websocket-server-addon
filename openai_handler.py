@@ -4,9 +4,12 @@ import json
 import io
 import struct
 import pydub
+from . import openai_tools_params
+from openai_tools_params import code_assistant_config
 
 client = OpenAI()
 thread_id = None
+
 
 def text_completion():
     completion = client.chat.completions.create(
@@ -23,6 +26,7 @@ def assistant_code_request(data) -> str:
     data = parse_assistant_code_request(data)
     if(data['status'] == "error"):
         return json.dumps(data)
+    
     user_request = data['user_request']
     # if user request length is less than 3, return a message saying that the request is too short
     if(len(user_request) < 3):
@@ -90,7 +94,7 @@ def assistant_code_request(data) -> str:
                 run_id=run.id
             )
         except Exception as e:
-            raise RuntimeError("Error retrieving assistant run status:\n" + str(e))
+            raise RuntimeError("Error retrieving assistant run status in the polling loop:\n" + str(e))
     
     try:
         messages = client.beta.threads.messages.list(
@@ -140,6 +144,27 @@ def assistant_code_request(data) -> str:
     
     print(message)
     return message    # return message
+
+def create_tool_using_assistant():
+    try:
+        assistant = client.beta.assistants.create(
+            **code_assistant_config
+        )
+    except Exception as e:
+        details = f"Error creating assistant: {e}\nThis happened during a code assitant request."
+        return {
+            "status": "error",
+            "type":"code_assistant_reply",
+            "short_remark":  "Failed to create code assistant, AI are like humans. Just try again.",
+            "stderr": details,
+            "code": "",
+            "caught_exception": "false",
+            "result": ""
+        }
+    return {
+        "status": "success",
+        "assistant": assistant
+    }
 
 def create_assistant(instructions = ""):
     try:
