@@ -5,10 +5,10 @@ import io
 import struct
 import pydub
 from . import openai_tools_params
-from openai_tools_params import code_assistant_config
 
 client = OpenAI()
 thread_id = None
+run_id = None
 
 
 def text_completion():
@@ -23,6 +23,7 @@ def text_completion():
     print(completion.choices[0].message)
 def assistant_code_request(data) -> str:
     global thread_id
+    global run_id
     data = parse_assistant_code_request(data)
     if(data['status'] == "error"):
         return json.dumps(data)
@@ -30,15 +31,7 @@ def assistant_code_request(data) -> str:
     user_request = data['user_request']
     # if user request length is less than 3, return a message saying that the request is too short
     if(len(user_request) < 3):
-        message = {"status": "error",
-            "type":"code_assistant_reply",
-            "short_remark":  "Your request is too short. Please try again.",
-            "stderr": "",
-            "code": "",
-            "caught_exception": "false",
-            "result": ""
-        }
-        return json.dumps(message)
+        return error("Your request is too short. Please try again.")
     #user_request = "print 'Wow, you really are a python console hot dogger' to the screen.))"
     instructions = ("You are a Python console expert. Back in the days, they would have called you a console hot dogger. "
                      "When the user requests for something to be done, reply with a json containing a short witty response, "
@@ -59,8 +52,13 @@ def assistant_code_request(data) -> str:
             thread = client.beta.threads.create()
             thread_id = thread.id
     except Exception as e:
-        raise RuntimeError("Error creating assistant thread:\n" + str(e))
+        return error("Error creating assistant thread:\n" + str(e))
     
+    # Here I would want to see if the message contains a function call id
+    # if it does, I would want to format the message as a function output
+    # if it's a user message, I know it's from a user input function
+    # if it's a console code return message, I know it's from a console code function
+    # tool outputs require a run id.
     try: 
         message = client.beta.threads.messages.create(
             thread_id=thread.id,
@@ -68,23 +66,26 @@ def assistant_code_request(data) -> str:
             content=user_request
         )
     except Exception as e:
-        raise RuntimeError("Error creating assistant message:\n" + str(e))
+        return error("Error creating assistant message:\n" + str(e))
     
     try:
-        run = client.beta.threads.runs.create(
-            thread_id=thread.id,
-            assistant_id=assistant.id,
-        )
+        # run id is set to none when completed status is recieved
+        if run_id is None:
+            run = client.beta.threads.runs.create(
+                thread_id=thread.id,
+                assistant_id=assistant.id,
+            )
+            run_id = run.id
     except Exception as e:
-        raise RuntimeError("Error creating assistant run:\n" + str(e))
+        return error("Error creating assistant run:\n" + str(e))
     
     try:
         run = client.beta.threads.runs.retrieve(
             thread_id=thread.id,
-            run_id=run.id
+            run_id=run_id
         )
     except Exception as e:
-        raise RuntimeError("Error retrieving assistant run status:\n" + str(e))
+        return error("Error retrieving assistant run status:\n" + str(e))
     
     while run.status != "completed":
         wait(1)
@@ -93,39 +94,57 @@ def assistant_code_request(data) -> str:
                 thread_id=thread.id,
                 run_id=run.id
             )
+            # here I would check for an "requires_action" status and a "required action key"
+            # required action.type should be "submit_tools_outputs"
+            # there will also be a "submit_tools_outputs" key by the same name
+            # it contains a "tool_calls" list
+            # and each item in the list will look like this:
+            """
+                {
+            "id": "call_abc123",
+            "type": "function",
+            "function": {
+                "name": "getCurrentWeather",
+                "arguments": "{\"location\":\"San Francisco\"}"
+            }
+            """
+            # notice that arguments requires further parsing
+            # We will simply call a function according the the function name
+            # and pass the arguments as a dictionary
+            # our current scheme returns a json string that the server sends as
+            # a message back to the client
+            # things are getting long, so we should probably refactor
+            # error message construction into a function that just takes a string message.
+        
         except Exception as e:
-            raise RuntimeError("Error retrieving assistant run status in the polling loop:\n" + str(e))
+            return error("Error retrieving assistant run status in the polling loop:\n" + str(e))
     
+    # completed status recieved
+    run_id = None
     try:
         messages = client.beta.threads.messages.list(
             thread_id=thread.id
         )
     except Exception as e:
-        raise RuntimeError("Got a message back but error parsing assistant messages:\n" + str(e))
+        return error("Got a message back but error parsing assistant messages:\n" + str(e))
     
     try:
         first_message = messages.data[0] 
     except Exception as e:
-        raise RuntimeError("Got a message back but messages.data[0] wasn't there:\n" + str(e))
+        return error("Got a message back but messages.data[0] wasn't there:\n" + str(e))
     # Accessing the first element in the data list
     
     try:
         first_message_text = first_message.content[0].text.value  # Assuming the structure matches your output
     except Exception as e:
-        raise RuntimeError("Messages.data[0] was there but first_message.content[0].text.value wasn't there:\n" + str(e))
+        return error("Messages.data[0] was there but first_message.content[0].text.value wasn't there:\n" + str(e))
     
     first_message_text = strip_md_formatting(first_message_text)
     print(first_message_text)
     if(first_message_text == ""):
         # send code assistant reply failed message
-        message = {"status": "error",
-            "type":"code_assistant_reply",
-            "short_remark":  "Failed to parse code assistant JSON, Please try again.",
-            "stderr": "",
-            "code": "",
-            "caught_exception": "false",
-            "result": ""
-        }
+        return error("Failed to parse code assistant JSON, Please try again.")
+    
     message_json = json.loads(first_message_text)
     short_remark = message_json['short_remark']
     code = message_json['code']
@@ -140,15 +159,29 @@ def assistant_code_request(data) -> str:
     try:
         message = json.dumps(message)
     except Exception as e:
-        raise RuntimeError("Everything went through fine, but error converting assistant_code_reply to json:\n" + str(e))
+        return error("Everything went through fine, but error converting assistant_code_reply to json:\n" + str(e))
     
     print(message)
     return message    # return message
 
+def error(message) -> str:
+    message =  {
+        "status": "error", 
+        "type":"code_assistant_reply", 
+        "short_remark": message,
+        "stderr": message,
+        "code": "",
+        "caught_exception": "false",
+        "result": ""      
+    }
+    message = json.dumps(message)
+    print(message)
+    return message
+
 def create_tool_using_assistant():
     try:
         assistant = client.beta.assistants.create(
-            **code_assistant_config
+            **openai_tools_params.code_assistant_config
         )
     except Exception as e:
         details = f"Error creating assistant: {e}\nThis happened during a code assitant request."
@@ -268,7 +301,7 @@ def speech_to_text(data):
         )
     except Exception as e:
         
-        raise RuntimeError("Error sending to openai:\n" + e)
+        raise RuntimeError("Error sending to openai:\n" + str(e))
         
     text = transcript.text
     print(text)

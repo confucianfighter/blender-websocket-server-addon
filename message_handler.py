@@ -48,7 +48,7 @@ def process_incomming_json_request(json_string):
         message = {"status": "error",
             "type":"console_return",
             "stdout": "",
-            "stderr": "Error in process_incomming_json_request:\n" + e,
+            "stderr": "Error in process_incomming_json_request:\n" + str(e),
             "caught_exception": "false",
             "result": ""
         }
